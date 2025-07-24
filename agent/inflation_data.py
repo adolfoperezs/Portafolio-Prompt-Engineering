@@ -28,7 +28,9 @@ def find_index_for_year(ipc_series: list, year: int) -> float | None:
     Busca el valor de Enero, si no, el primer mes que encuentre.
     """
     for record in reversed(ipc_series): # Revertido para buscar del más antiguo al más nuevo
-        record_date = datetime.fromisoformat(record['fecha'])
+        # Se reemplaza la 'Z' para compatibilidad con versiones de Python < 3.11
+        date_str = record['fecha'].replace('Z', '+00:00')
+        record_date = datetime.fromisoformat(date_str)
         if record_date.year == year:
             return record['valor']
     return None
