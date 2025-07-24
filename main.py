@@ -1,44 +1,65 @@
 #!/usr/bin/env python3
 """
-Calculadora de Inflación con Agente de IA
-Punto de entrada principal del proyecto
+Agente Conversacional para Calcular Inflación con LangChain
 """
-
 import os
-from dotenv import load_dotenv
-from agent.inflation_data import get_inflation_factor
+from dotenv import load_dotenv, find_dotenv
 
-# Cargar variables de entorno
-load_dotenv()
+# Cargar las variables de entorno
+load_dotenv(find_dotenv(usecwd=True))
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    print("🛑 ERROR: La variable de entorno OPENAI_API_KEY no está configurada o no se pudo leer.")
+    exit()
+
+from langchain_openai import ChatOpenAI
+from langchain import hub
+from langchain.agents import create_react_agent, AgentExecutor
+from agent.tool import inflation_tool
 
 def main():
-    """Función principal para la calculadora de inflación"""
-    print("💰 Calculadora de Inflación para Chile (CLP)")
-    print("=" * 50)
-    print("Esta herramienta convierte un monto en pesos chilenos de un año pasado a su valor equivalente hoy, usando datos del IPC.")
-    print("-" * 50)
+    """Punto de entrada principal del agente conversacional."""
+    print("🤖 ¡Hola! Soy el Agente de Inflación.")
+    print("Puedo ayudarte a calcular el valor del dinero en el tiempo.")
+    print("="*50)
 
-    try:
-        amount_str = input("➡️  Ingresa el monto original (ej: 10000): ")
-        amount = float(amount_str)
+    # 1. Configuración del LLM
+    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
 
-        year_str = input("➡️  Ingresa el año base (ej: 1990): ")
-        year = int(year_str)
+    # 2. Definir herramientas
+    tools = [inflation_tool]
 
-        factor = get_inflation_factor(year)
+    # 3. Cargar el prompt del sistema desde LangChain Hub
+    prompt = hub.pull("hwchase17/react")
 
-        if factor is not None:
-            converted_amount = amount * factor
-            print("\n" + "="*50)
-            print(f"📈 Resultado:")
-            print(f"Un monto de ${amount:,.0f} en el año {year} equivale a")
-            print(f"aproximadamente ${converted_amount:,.0f} pesos de hoy.")
-            print("="*50)
+    # 4. Crear el agente
+    agent = create_react_agent(llm, tools, prompt)
 
-    except ValueError:
-        print("❌ Error: Por favor, ingresa un número válido para el monto y el año.")
-    except Exception as e:
-        print(f"Ha ocurrido un error inesperado: {e}")
+    # 5. Crear el Ejecutor del Agente
+    agent_executor = AgentExecutor(
+        agent=agent, 
+        tools=tools, 
+        verbose=True,
+        handle_parsing_errors=True # Maneja errores de parseo de forma robusta
+    )
+
+    # Bucle interactivo
+    while True:
+        try:
+            user_input = input("➡️  ¿Qué te gustaría calcular? (o escribe 'salir'): ")
+            if user_input.lower() in ("salir", "exit", "quit"):
+                print("👋 ¡Hasta luego!")
+                break
+            
+            if user_input.strip():
+                response = agent_executor.invoke({"input": user_input})
+                print("\n✅ Respuesta del Agente:")
+                print(response['output'])
+                print("-" * 50)
+
+        except Exception as e:
+            print(f"💥 Ha ocurrido un error: {e}")
+            print("Vamos a intentarlo de nuevo.")
 
 if __name__ == "__main__":
     main() 
